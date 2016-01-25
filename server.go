@@ -16,20 +16,25 @@ import (
 	)
  
 var mutex = &sync.Mutex{}
+var mutex_ver = &sync.Mutex{}
+var mutex_rd = &sync.Mutex{}
+var mutex_wrt = &sync.Mutex{}
+var mutex_cas = &sync.Mutex{}
+var mutex_del = &sync.Mutex{}
 
- 
 var db, _ = leveldb.OpenFile("/tmp/file_content.db", nil)
 var db_ver, _ = leveldb.OpenFile("/tmp/version.db", nil)
 var db_fver, _ = leveldb.OpenFile("/tmp/file_version.db", nil)
 var db_expiry, _ = leveldb.OpenFile("/tmp/file_expiry.db", nil)
 var db_exp_sec, _ = leveldb.OpenFile("/tmp/file_exp_sec.db", nil)
 
-	
 func serverMain(){
 
 	ip_address, err := net.ResolveTCPAddr("tcp4","localhost:8080")
 	if err!=nil {
 	} else {
+	
+//	checkexpiry()
 	listen, _  := net.ListenTCP("tcp", ip_address)
 	for {
 	conn, err := listen.Accept()
@@ -39,9 +44,9 @@ func serverMain(){
 	}}}
 }
 
-
+/*
 func incVersion(){
-//        mutex.Lock()
+        mutex.Lock()
         var version int64 = 0
         data,err:= db_ver.Get([]byte("version"), nil)
         if(err != nil) {
@@ -52,32 +57,49 @@ func incVersion(){
         version = version + 1
         _ = db_ver.Put([]byte("version"), []byte(strconv.FormatInt(version, 10)), nil)
         }
- //       mutex.Unlock()
+       mutex.Unlock()
 }
-
+*/
 
 func getVersion(fname string) (int64) {
-   //     mutex.Lock()
+        //mu.Lock()
         data,err:= db_fver.Get([]byte(fname), nil)
-//        defer mutex.Unlock()
+        //defer mu.Unlock()
         if(err != nil) {
                 return -1
         } else {
         version, _ := strconv.ParseInt(string(data), 10, 64)    
+        //fmt.Prin("\n++++",version)        
         return version        
         }
 }
 
 func setVersion(  fname string) {
-//          mutex.Lock()
-        incVersion()
-        data,_:= db_ver.Get([]byte("version"), nil)
-        ver , _ := strconv.ParseInt(string(data), 10, 64)    
-        _ = db_fver.Put([]byte(fname), []byte(strconv.FormatInt(ver, 10)), nil)
-          
- //         mutex.Unlock()
+        //fmt.Prin("\n$")
+        mutex_ver.Lock()
+        //fmt.Prin("$")
+//        incVersion()
+        var version int64 = 0
+        data,err:= db_ver.Get([]byte("version"), nil)
+        if(err != nil) {
+        version = 1
+        _ = db_ver.Put([]byte("version"), []byte(strconv.FormatInt(version, 10)), nil)
+        } else {
+        version, _ = strconv.ParseInt(string(data), 10, 64)    
+        version = version + 1
+        _ = db_ver.Put([]byte("version"), []byte(strconv.FormatInt(version, 10)), nil)
+        }
+//        data,_ = db_ver.Get([]byte("version"), nil)
+        //fmt.Prin("\n****",version)
+//        ver , _ := strconv.ParseInt(string(version), 10, 64)    
+//        //fmt.Prin("\n----",ver)
+        err = db_fver.Put([]byte(fname), []byte(strconv.FormatInt(version, 10)), nil)
+        //fmt.Prin("\n$!")
+        mutex_ver.Unlock()
+        //fmt.Prin("$!")
 }
 
+/*
 func setExpiry(  fname string,   exp int64 ) {
 
    //       mutex.Lock()
@@ -86,17 +108,16 @@ func setExpiry(  fname string,   exp int64 ) {
         if(err != nil) {
         }
 //          mutex.Unlock()
-}
+} */
 
 func getExpiry(  fname string) (int64){
-  //        mutex.Lock()
+
           data, err := db_expiry.Get([]byte(fname), nil)
-    //      mutex.Unlock()
+       
           if (err != nil) {
           return -1
           } else {
           exp, err := strconv.ParseInt(string(data), 10, 64)        
-          
                if(err !=nil) {
                return -1
                } else {
@@ -106,12 +127,17 @@ func getExpiry(  fname string) (int64){
 }
 
 func setExpirySec(  fname string,   exp int64) {
-        
-      //    mutex.Lock()
-        setExpiry(fname,exp)
-        err := db_exp_sec.Put([]byte(fname), []byte(strconv.FormatInt(exp, 10)), nil)
+
+   //       mutex_exp.Lock()        
+       // mutex.Lock()
+       // setExpiry(fname,exp)
+        exp = exp + time.Now().Unix()
+        err := db_expiry.Put([]byte(fname), []byte(strconv.FormatInt(exp, 10)), nil)
+        err = db_exp_sec.Put([]byte(fname), []byte(strconv.FormatInt(exp, 10)), nil)
         if(err != nil) {
         }
+        
+ //         defer mutex_exp.Unlock()
        //   mutex.Unlock()
 }
 
@@ -137,7 +163,31 @@ func getExpirySec(  fname string) (int64) {
 func checkexpiry(){
         for true {
         time.Sleep(1000000000)
-        for k := range expiry {
+        
+        iter := db.NewIterator(nil, nil)
+
+        for iter.Next() {
+        if(iter !=nil) {
+        cur_time  := time.Now().Unix()
+	// Remember that the contents of the returned slice should not be modified, and
+	// only valid until the next call to Next.
+	
+	if(cur_time >= getExpiry(string(iter.Key()))) {
+	db.Delete([]byte(string(iter.Key())), nil)
+        db_fver.Delete([]byte(string(iter.Key())), nil)
+        db_expiry.Delete([]byte(string(iter.Key())), nil)
+        db_exp_sec.Delete([]byte(string(iter.Key())), nil)
+	}
+	}
+	//fmt.Print("\nKEY : ",iter.Key())
+//        fmt.Print("\nValue : ",iter.Value())
+        }
+        iter.Release()
+        _ = iter.Error()
+
+
+        
+/*        for k := range expiry 
         cur_time  := time.Now().Unix()
         if(exp_sec[k] != -1 && exp_sec[k]!=0) {
         if (expiry[k]<=cur_time) {
@@ -152,8 +202,8 @@ func checkexpiry(){
         
         }}
     }}
-}*/
-
+*/
+ 
 
 func client(conn net.Conn){
 
@@ -211,17 +261,25 @@ func client(conn net.Conn){
 	fmt.Fprintf(conn,"ERR_INTERNAL\r\n")
 	} else {
 	
-        mutex.Lock()		
+	//fmt.Prin("\n@")
+        mutex.Lock()	
+	//fmt.Prin("@")
+	
         err = db.Put([]byte(string(part[1])), []byte(content), nil)
-        mutex.Unlock()		
+        
+        //fmt.Prin("\n@!")
+        mutex.Unlock()	
+        //fmt.Prin("@!")	
         
 	if (err!=nil) {
 	fmt.Fprintf(conn,"ERR_INTERNAL\r\n")
 	} else {
 	
-	mutex.Lock()		
+	//fmt.Prin("\n#")
+	mutex.Lock()	
+	//fmt.Prin("#")	
         setVersion(string(part[1]))
-//        fmt.Print("\nVersion : ",getVersion(string(part[1])))
+        //fmt.Prin("\nVersion : ",getVersion(string(part[1])))
         fmt.Fprintf(conn,"OK %v\r\n",getVersion(string(part[1])))	              
         
 	if (len(part)==4) {
@@ -229,7 +287,9 @@ func client(conn net.Conn){
         } else {
         	setExpirySec(string(part[1]),int64(-1))
         }
+        //fmt.Prin("\n#!")
         mutex.Unlock()
+        //fmt.Prin("#!")
         }
      //   mutex.Unlock()		
 	content = nil
@@ -279,15 +339,15 @@ func client(conn net.Conn){
 	
 //	mutex.Lock()
 	//delete
-	mutex.Lock()
+	mutex_cas.Lock()
         err = db.Put([]byte(string(part[1])), []byte(content), nil)
-        mutex.Unlock()
+        mutex_cas.Unlock()
         
 	if (err!=nil) {
 	fmt.Fprintf(conn,"ERR_INTERNAL\r\n")
 	} else {
 	
-        mutex.Lock()
+        mutex_cas.Lock()
 	if (len(part)==4) {
 	setExpirySec(string(part[1]),int64(-1))
 //        exp_sec[part[1]]	= -1
@@ -299,7 +359,7 @@ func client(conn net.Conn){
 	setVersion(string(part[1]))
         fmt.Fprintf(conn,"OK %v\r\n",getVersion(string(part[1])))	              
         
-        mutex.Unlock()
+        mutex_cas.Unlock()
 	}
 //	
 	content = nil
@@ -315,37 +375,39 @@ func client(conn net.Conn){
 	
 	if(len(part)==2 && len(part[1])<=256){
 
-        mutex.Lock()
+        mutex_rd.Lock()
+        //fmt.Prin("\nread1")
         contents, err := db.Get([]byte(string(part[1])), nil)
-        mutex.Unlock()
+                //fmt.Prin("\nread2")
+//        mutex_rd.Unlock()
         
-	////fmt.Print("\nFile Name : ",len(string(part[1])))
+	//////fmt.Prin("\nFile Name : ",len(string(part[1])))
 	if(err !=nil) {
 	
 	fmt.Fprintf(conn,"ERR_FILE_NOT_FOUND\r\n")
 	}else {
 	
-	mutex.Lock()
-	////fmt.Print("\nFile Content :",string(contents))
+//	mutex.Lock()
+	//////fmt.Prin("\nFile Content :",string(contents))
 //	if (exp_sec[string(part[1])] == -1)
         if (getExpirySec(string(part[1])) == -1){
 	fmt.Fprintf(conn,"CONTENTS %v %v\r\n%v\r\n",getVersion(string(part[1])),len(contents),string(contents))	
 	}else {
 	fmt.Fprintf(conn,"CONTENTS %v %v %v\r\n%v\r\n",getVersion(string(part[1])),len(contents),getExpirySec(string(part[1])),string(contents))	
-	mutex.Unlock()
-	}}
 //	mutex.Unlock()
+	}}
+	mutex_rd.Unlock()
 	
 	} else {
 	fmt.Fprintf(conn,"ERR_CMD_ERR\r\n")
 	}
 	
 	} else if ((strings.Compare(part[0],"delete"))==0) {
-	////fmt.Print("\nDELETE")
+	//////fmt.Prin("\nDELETE")
 	if(len(part)==2 && len(part[1])<=256){
 	
 	
-        mutex.Lock()
+        mutex_del.Lock()
         err = db.Delete([]byte(string(part[1])), nil)
         
 	if(err != nil) {
@@ -356,7 +418,7 @@ func client(conn net.Conn){
         db_exp_sec.Delete([]byte(string(part[1])), nil)
 	fmt.Fprintf(conn,"OK\r\n")
 	}
-        mutex.Unlock()
+        mutex_del.Unlock()
         
 	} else {
 	fmt.Fprintf(conn,"ERR_CMD_ERR\r\n")

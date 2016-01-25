@@ -27,7 +27,8 @@ func TestTCPSimple(t *testing.T) {
 
 	// Write a file
 	
-	
+        //fmt.Print("\nTest1")
+        
 	fmt.Fprintf(conn, "write %v %v %v\r\n%v\r\n", name, len(contents), exptime, contents)
 	scanner.Scan() // read first line
 	resp := scanner.Text() // extract the text from the buffer
@@ -48,7 +49,7 @@ func TestTCPSimple(t *testing.T) {
 	scanner.Scan()
 	expect(t, contents, scanner.Text())
 	
-	
+	//fmt.Print("\nTest2")
 	//testing cas
 	contents = "testing cas"
 	// cas a file
@@ -77,6 +78,7 @@ func TestTCPSimple(t *testing.T) {
 	scanner.Scan()
 	expect(t, contents, scanner.Text())
 	
+	//fmt.Print("\nTest3")
 	//testing delete
 	
 	fmt.Fprintf(conn, "delete %v\r\n", name)
@@ -89,10 +91,11 @@ func TestTCPSimple(t *testing.T) {
 	 
 	fmt.Fprintf(conn, "read %v\r\n", name) // try a read now
 	scanner.Scan()
-//        fmt.Print(scanner.Text())
+//        //fmt.Print(scanner.Text())
 //	arr = strings.Split(scanner.Text(), " ")
 	expect(t, scanner.Text(), "ERR_FILE_NOT_FOUND")
 	
+	//fmt.Print("\nTest4")
 	// checking command error
 	
 	fmt.Fprintf(conn, "write %v\r\n%v\r\n", name)
@@ -103,6 +106,7 @@ func TestTCPSimple(t *testing.T) {
         
        	scanner.Scan() // read first line
 	
+	//fmt.Print("\nTest5")
 	// Internal error example
 	
 	fmt.Fprintf(conn, "write %v %v\r\n%v\r\n", name,"ab",contents)
@@ -112,6 +116,7 @@ func TestTCPSimple(t *testing.T) {
 	expect(t, arr[0], "ERR_INTERNAL")
        	scanner.Scan() // read first line
 	
+	//fmt.Print("\nTest6")
 	//testing version err
 	
 	name = "file.txt"
@@ -137,6 +142,7 @@ func TestTCPSimple(t *testing.T) {
 	scanner.Scan()
 	expect(t, contents, scanner.Text())
 	
+	//fmt.Print("\nTest7")
 	//testing cas
 	contents = "testing cas"
 	// cas a file
@@ -149,28 +155,31 @@ func TestTCPSimple(t *testing.T) {
 	
 	scanner.Scan() // read first line
 	
+        //fmt.Print("\nsequential complete")
+	
 	for i:=0;i<10;i++ {
 	go cuncur_check(t)
 	}
 	time.Sleep(5000000000)
 	
 	
+	/*
 	name = "test.txt"
 	contents = "testing write"
         fmt.Fprintf(conn, "read %v\r\n", name)// try a read now
 	scanner.Scan()
-        //fmt.Print("\n#",scanner.Text())       
+        ////fmt.Print("\n#",scanner.Text())       
 	arr = strings.Split(scanner.Text(), " ")
 	expect(t, arr[0], "CONTENTS")
 	//expect(t, arr[1], fmt.Sprintf("%v", version)) // expect only accepts strings, convert int version to string
 	expect(t, arr[2], fmt.Sprintf("%v", len(contents)))	
 	scanner.Scan()
 	expect(t, contents, scanner.Text())
-	
+	*/
 	//scanner.Scan()
-        //fmt.Print("\n",scanner.Text())       
+        ////fmt.Print("\n",scanner.Text())       
 	
-	//fmt.Print(version)
+	////fmt.Print(version)
 }
 	
 
@@ -179,7 +188,9 @@ func TestTCPSimple(t *testing.T) {
 
 func cuncur_check(t *testing.T) {
 
-       name := "test.txt"
+    go serverMain()
+        time.Sleep(1 * time.Second) // one second is enough time for the server to start
+	name := "test.txt"
 	contents := "testing write"
 	exptime := 300000
 	conn, err := net.Dial("tcp", "localhost:8080")
@@ -191,29 +202,27 @@ func cuncur_check(t *testing.T) {
 
 	// Write a file
 	
+        //fmt.Print("\nTest1")
+        
 	fmt.Fprintf(conn, "write %v %v %v\r\n%v\r\n", name, len(contents), exptime, contents)
 	scanner.Scan() // read first line
 	resp := scanner.Text() // extract the text from the buffer
 	arr := strings.Split(resp, " ") // split into OK and <version>
 	expect(t, arr[0], "OK")
-	//version, err := strconv.ParseInt(arr[1], 10, 64) // parse version as number
 	_, err = strconv.ParseInt(arr[1], 10, 64) // parse version as number
 	if err != nil {
 		t.Error("Non-numeric version found")
 	}
-//        fmt.Print(version)
-        
-/*
+
 	fmt.Fprintf(conn, "read %v\r\n", name) // try a read now
 	scanner.Scan()
 
 	arr = strings.Split(scanner.Text(), " ")
 	expect(t, arr[0], "CONTENTS")
-	expect(t, arr[1], fmt.Sprintf("%v", version)) // expect only accepts strings, convert int version to string
+	//expect(t, arr[1], fmt.Sprintf("%v", version)) // expect only accepts strings, convert int version to string
 	expect(t, arr[2], fmt.Sprintf("%v", len(contents)))	
 	scanner.Scan()
 	expect(t, contents, scanner.Text())
-*/	
 	
 }
 
