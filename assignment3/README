@@ -1,0 +1,13 @@
+
+log entry index starts from 1,2,3
+means some dummy entry present at 0th index
+Entry at 0th index 
+	with term : 0
+	
+
+Assumption:
+------------
+Append entries are added one by one as Entry type.
+i.e There is no array of Entry to append
+
+
