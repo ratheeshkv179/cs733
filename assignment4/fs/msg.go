@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	//	"github.com/ratheeshkv179/cs733/assignment5/fs"
 	"io"
 	"strconv"
 	"strings"
 )
 
 var MAX_FIRST_LINE_SIZE = 500
-var MAX_CONTENT_SIZE = 1 << 32
+var MAX_CONTENT_SIZE = 100000 // 1 << 32
 
 // This struct encapsulates all messages, including requests,
 // responses and errors
@@ -50,13 +51,14 @@ type Msg struct {
 	Numbytes int
 	Exptime  int // expiry time in seconds
 	Version  int
+	ClientId int
 }
 
 func GetMsg(reader *bufio.Reader) (msg *Msg, msgerr error, fatalerr error) {
 	buf := make([]byte, MAX_FIRST_LINE_SIZE)
 	msg, msgerr, fatalerr = parseFirst(reader, buf)
 	if fatalerr == nil {
-		if msg.Kind == 'w' /*write*/|| msg.Kind == 'c' /*cas*/|| msg.Kind == 'C' /*CONTENTS*/{
+		if msg.Kind == 'w' /*write*/ || msg.Kind == 'c' /*cas*/ || msg.Kind == 'C' /*CONTENTS*/ {
 			msg.Contents, fatalerr = parseSecond(reader, msg.Numbytes)
 		}
 	}
@@ -71,7 +73,7 @@ func parseFirst(reader *bufio.Reader, buf []byte) (msg *Msg, msgerr error, fatal
 	var err error
 	var msgstr string
 	var fields []string
-	
+
 	if msgstr, err = fillLine(buf, reader); err != nil { // read until EOL
 		return nil, nil, err
 	}

@@ -9,9 +9,9 @@ simple telnet compatible API. Each file has a version number, and the server kee
 
 
 ```
-> go run server.go & 
+> go run ClientHandler.go & 
 
-> telnet localhost 8080
+> telnet localhost 9000
   Connected to localhost.
   Escape character is '^]'
   read foo

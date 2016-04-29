@@ -1,6 +1,5 @@
 package main
 
-
 import (
 	"bufio"
 	"bytes"
@@ -44,6 +43,7 @@ func expect(t *testing.T, response *Msg, expected *Msg, errstr string, err error
 }
 
 func TestRPC_BasicSequential(t *testing.T) {
+	client_id = 0
 	cl := mkClient(t)
 	defer cl.close()
 
@@ -93,6 +93,7 @@ func TestRPC_BasicSequential(t *testing.T) {
 }
 
 func TestRPC_Binary(t *testing.T) {
+	client_id = 0
 	cl := mkClient(t)
 	defer cl.close()
 
@@ -108,6 +109,7 @@ func TestRPC_Binary(t *testing.T) {
 }
 
 func TestRPC_Chunks(t *testing.T) {
+	client_id = 0
 	// Should be able to accept a few bytes at a time
 	cl := mkClient(t)
 	defer cl.close()
@@ -135,6 +137,7 @@ func TestRPC_Chunks(t *testing.T) {
 }
 
 func TestRPC_Batch(t *testing.T) {
+	client_id = 0
 	// Send multiple commands in one batch, expect multiple responses
 	cl := mkClient(t)
 	defer cl.close()
@@ -152,6 +155,7 @@ func TestRPC_Batch(t *testing.T) {
 }
 
 func TestRPC_BasicTimer(t *testing.T) {
+	client_id = 0
 	cl := mkClient(t)
 	defer cl.close()
 
@@ -191,7 +195,7 @@ func TestRPC_BasicTimer(t *testing.T) {
 	expect(t, m, &Msg{Kind: 'F'}, "file not found after 4 sec", err)
 
 	// Create the file with an expiry time of 1 sec. We're going to delete it
-	// then immediately create it. The new file better not get deleted. 
+	// then immediately create it. The new file better not get deleted.
 	m, err = cl.write("cs733", str, 1)
 	expect(t, m, &Msg{Kind: 'O'}, "file created for delete", err)
 
@@ -207,12 +211,12 @@ func TestRPC_BasicTimer(t *testing.T) {
 
 }
 
-
 // nclients write to the same file. At the end the file should be
 // any one clients' last write
 
 func TestRPC_ConcurrentWrites(t *testing.T) {
-	nclients := 500
+	client_id = 0
+	nclients := 10
 	niters := 10
 	clients := make([]*Client, nclients)
 	for i := 0; i < nclients; i++ {
@@ -253,7 +257,7 @@ func TestRPC_ConcurrentWrites(t *testing.T) {
 			if m.Kind != 'O' {
 				t.Fatalf("Concurrent write failed with kind=%c", m.Kind)
 			}
-		case err := <- errCh:
+		case err := <-errCh:
 			t.Fatal(err)
 		}
 	}
@@ -270,8 +274,9 @@ func TestRPC_ConcurrentWrites(t *testing.T) {
 // client loops around until each CAS succeeds. The number of concurrent clients has been
 // reduced to keep the testing time within limits.
 func TestRPC_ConcurrentCas(t *testing.T) {
-	nclients := 100
-	niters := 10
+	client_id = 0
+	nclients := 5
+	niters := 6
 
 	clients := make([]*Client, nclients)
 	for i := 0; i < nclients; i++ {
@@ -296,7 +301,7 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 	wg.Add(nclients)
 
 	errorCh := make(chan error, nclients)
-	
+
 	for i := 0; i < nclients; i++ {
 		go func(i int, ver int, cl *Client) {
 			sem.Wait()
@@ -305,10 +310,12 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 				str := fmt.Sprintf("cl %d %d", i, j)
 				for {
 					m, err := cl.cas("concCas", ver, str, 0)
+					//	fmt.Print("\n[[[[", str, "]]]]\n")
 					if err != nil {
 						errorCh <- err
 						return
 					} else if m.Kind == 'O' {
+						//		fmt.Println("\n######BREAK#####\n")
 						break
 					} else if m.Kind != 'V' {
 						errorCh <- errors.New(fmt.Sprintf("Expected 'V' msg, got %c", m.Kind))
@@ -324,12 +331,13 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 	sem.Done()                         // Start goroutines
 	wg.Wait()                          // Wait for them to finish
 	select {
-	case e := <- errorCh:
+	case e := <-errorCh:
 		t.Fatalf("Error received while doing cas: %v", e)
 	default: // no errors
 	}
 	m, _ = clients[0].read("concCas")
-	if !(m.Kind == 'C' && strings.HasSuffix(string(m.Contents), " 9")) {
+	//	fmt.Println("\n\n$$$$$$$", m)
+	if !(m.Kind == 'C' && strings.HasSuffix(string(m.Contents), " 5")) {
 		t.Fatalf("Expected to be able to read after 1000 writes. Got msg.Kind = %d, msg.Contents=%s", m.Kind, m.Contents)
 	}
 }
@@ -358,8 +366,10 @@ func (cl *Client) write(filename string, contents string, exptime int) (*Msg, er
 	var cmd string
 	if exptime == 0 {
 		cmd = fmt.Sprintf("write %s %d\r\n", filename, len(contents))
+		//fmt.Println(cmd)
 	} else {
 		cmd = fmt.Sprintf("write %s %d %d\r\n", filename, len(contents), exptime)
+		//fmt.Println(cmd)
 	}
 	cmd += contents + "\r\n"
 	return cl.sendRcv(cmd)
@@ -369,8 +379,10 @@ func (cl *Client) cas(filename string, version int, contents string, exptime int
 	var cmd string
 	if exptime == 0 {
 		cmd = fmt.Sprintf("cas %s %d %d\r\n", filename, version, len(contents))
+		//fmt.Println(cmd)
 	} else {
 		cmd = fmt.Sprintf("cas %s %d %d %d\r\n", filename, version, len(contents), exptime)
+		//fmt.Println(cmd)
 	}
 	cmd += contents + "\r\n"
 	return cl.sendRcv(cmd)
@@ -390,7 +402,7 @@ type Client struct {
 
 func mkClient(t *testing.T) *Client {
 	var client *Client
-	raddr, err := net.ResolveTCPAddr("tcp", "localhost:8080")
+	raddr, err := net.ResolveTCPAddr("tcp", "localhost:9000")
 	if err == nil {
 		conn, err := net.DialTCP("tcp", nil, raddr)
 		if err == nil {
@@ -472,7 +484,7 @@ func parseFirst(line string) (msg *Msg, err error) {
 	toInt := func(fieldNum int) int {
 		var i int
 		if err == nil {
-			if fieldNum >=  len(fields) {
+			if fieldNum >= len(fields) {
 				err = errors.New(fmt.Sprintf("Not enough fields. Expected field #%d in %s\n", fieldNum, line))
 				return 0
 			}
